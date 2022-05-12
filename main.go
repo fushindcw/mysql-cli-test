@@ -29,8 +29,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&port, "port", "P", "3306", "port")
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "V", false, "app version")
 	rootCmd.PersistentFlags().StringVarP(&username, "user", "U", "", "login username")
-	rootCmd.PersistentFlags().StringVarP(&password, "pwd", "", "Tv=9O9k:NlmB.s3+", "login password")
-	rootCmd.PersistentFlags().StringVarP(&database, "db", "D", "xiaodu_v2_dev", "database")
+	rootCmd.PersistentFlags().StringVarP(&password, "pwd", "", "", "login password")
+	rootCmd.PersistentFlags().StringVarP(&database, "db", "D", "", "database")
 }
 
 const maxFailedTimes = 5
