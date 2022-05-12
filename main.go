@@ -7,6 +7,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"os"
+	"strings"
 )
 
 var (
@@ -15,13 +16,21 @@ var (
 	username    string
 	password    string
 	showVersion bool
+	database    string
 )
 
+var languageMatch = make(map[string]func(string))
+
 func init() {
+	languageMatch["select"] = query
+	languageMatch["help"] = help
+	languageMatch["h"] = help
 	rootCmd.PersistentFlags().StringVarP(&host, "host", "H", "127.0.0.1", "host")
 	rootCmd.PersistentFlags().StringVarP(&port, "port", "P", "3306", "port")
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "V", false, "app version")
 	rootCmd.PersistentFlags().StringVarP(&username, "user", "U", "", "login username")
+	rootCmd.PersistentFlags().StringVarP(&password, "pwd", "", "Tv=9O9k:NlmB.s3+", "login password")
+	rootCmd.PersistentFlags().StringVarP(&database, "db", "D", "xiaodu_v2_dev", "database")
 }
 
 const maxFailedTimes = 5
@@ -56,8 +65,7 @@ func main() {
 }
 
 func createDb() bool {
-	dbConnectStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/", username, password, host, port)
-	fmt.Println(dbConnectStr)
+	dbConnectStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, database)
 	var err error
 	db, err = sql.Open("mysql", dbConnectStr)
 	if err != nil {
@@ -90,28 +98,32 @@ func createJh() {
 		}
 		username = result
 	}
-	failedTimes := 0
-	//输入密码
-	for {
-		if failedTimes == maxFailedTimes {
-			fmt.Printf("密码错误次数到达%d次\n", maxFailedTimes)
-			os.Exit(1)
+	if password == "" {
+		failedTimes := 0
+		//输入密码
+		for {
+			if failedTimes == maxFailedTimes {
+				fmt.Printf("密码错误次数到达%d次\n", maxFailedTimes)
+				os.Exit(1)
+			}
+			prompt := promptui.Prompt{
+				Label:     "请输入密码: ",
+				Templates: templates,
+			}
+			result, err := prompt.Run()
+			if err != nil {
+				fmt.Printf("Prompt failed %v\n", err)
+				os.Exit(1)
+			}
+			password = result
+			if createDb() {
+				break
+			} else {
+				failedTimes++
+			}
 		}
-		prompt := promptui.Prompt{
-			Label:     "请输入密码: ",
-			Templates: templates,
-		}
-		result, err := prompt.Run()
-		if err != nil {
-			fmt.Printf("Prompt failed %v\n", err)
-			os.Exit(1)
-		}
-		password = result
-		if createDb() {
-			break
-		} else {
-			failedTimes++
-		}
+	} else {
+		createDb()
 	}
 	for {
 		prompt := promptui.Prompt{
@@ -128,7 +140,18 @@ func createJh() {
 			fmt.Println("bye!")
 			os.Exit(1)
 		} else {
-			execute(result)
+			if result == "" {
+				help(result)
+				continue
+			}
+			startStr := strings.Split(result, " ")[0]
+			startStr = strings.ToLower(startStr)
+			fnc := languageMatch[startStr]
+			if fnc != nil {
+				fnc(result)
+			} else {
+				execute(result)
+			}
 		}
 	}
 }
@@ -139,5 +162,43 @@ func execute(sql string) {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(&rs)
+	effectRow, err := rs.RowsAffected()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("%d rows effect", effectRow)
+}
+
+func query(sql string) {
+	rows, err := db.Query(sql)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	columnTypes, _ := rows.ColumnTypes()
+	for _, v := range columnTypes {
+		fmt.Printf("%s\t", v.Name())
+	}
+	fmt.Println()
+	for rows.Next() {
+		s := make([]interface{}, len(columnTypes))
+		for i, _ := range columnTypes {
+			s[i] = new(string)
+		}
+		rows.Scan(s...)
+		for _, v := range s {
+			fmt.Printf("%s\t", *(v.(*string)))
+		}
+		fmt.Println()
+	}
+}
+
+func help(string) {
+	fmt.Printf("%s\t%s\n", "help", "help options")
+	fmt.Printf("%s\t%s\n", "update", "update options")
+	fmt.Printf("%s\t%s\n", "delete", "delete options")
+	fmt.Printf("%s\t%s\n", "insert", "insert options")
+	fmt.Printf("%s\t%s\n", "select", "select options")
+	fmt.Printf("%s\t%s\n", "exit", "exit app")
 }
